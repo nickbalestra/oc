@@ -10,6 +10,8 @@ var getLocalNpmModules = require('./get-local-npm-modules');
 var packageComponents = require('./package-components');
 var mock = require('./mock');
 var validator = require('../../registry/domain/validators');
+var initTemplate = require('./init-template');
+
 
 module.exports = function(dependencies){
   var logger = dependencies.logger;
@@ -39,30 +41,33 @@ module.exports = function(dependencies){
         return callback('name not valid');
       }
 
-      if(!validator.validateTemplateType(templateType)){
-        return callback('template type not valid');
+      // LEGACY TEMPLATES
+      if(validator.validateTemplateType(templateType)){
+        try {
+          var pathDir = '../../components/base-component-' + templateType,
+              baseComponentDir = path.resolve(__dirname, pathDir),
+              npmIgnorePath = path.resolve(__dirname, pathDir + '/.npmignore');
+
+          fs.ensureDirSync(componentName);
+          fs.copySync(baseComponentDir, componentName);
+          fs.copySync(npmIgnorePath, componentName + '/.gitignore');
+
+          var componentPath = path.resolve(componentName, 'package.json'),
+            component = _.extend(fs.readJsonSync(componentPath), {
+              name: componentName
+            });
+
+          fs.outputJsonSync(componentPath, component);
+
+          return callback(null, { ok: true });
+        } catch(e){
+          return callback(e);
+        }
       }
-
       try {
-
-        var pathDir = '../../components/base-component-' + templateType,
-            baseComponentDir = path.resolve(__dirname, pathDir),
-            npmIgnorePath = path.resolve(__dirname, pathDir + '/.npmignore');
-
-        fs.ensureDirSync(componentName);
-        fs.copySync(baseComponentDir, componentName);
-        fs.copySync(npmIgnorePath, componentName + '/.gitignore');
-
-        var componentPath = path.resolve(componentName, 'package.json'),
-          component = _.extend(fs.readJsonSync(componentPath), {
-            name: componentName
-          });
-
-        fs.outputJsonSync(componentPath, component);
-
-        return callback(null, { ok: true });
-      } catch(e){
-        return callback(e);
+        initTemplate(componentName, templateType, callback);
+      } catch (e) {
+        return callback('template type not valid');
       }
     },
     mock: mock(),
